@@ -1,4 +1,4 @@
-# BookLeaf Support Portal, API Reference
+# BookLeaf Support Portal API Reference
 
 Base URL (local): `http://localhost:4000/api`
 

@@ -1,139 +1,172 @@
 # BookLeaf Author Support & Communication Portal
 
-A two-sided support portal for BookLeaf Publishing: authors submit and track support tickets, admins triage and respond, and an AI layer (Anthropic Claude) classifies tickets, scores priority, and drafts replies grounded in BookLeaf's actual policies.
+Support ticket system for BookLeaf Publishing. Authors log in to see their
+books and raise tickets about royalties, ISBNs, printing, whatever. Admins
+get a queue, and an AI layer (Claude) tags each ticket with a category and
+priority and drafts a reply using BookLeaf's actual policies, which the
+admin edits before sending.
 
-Built for the BookLeaf technical assignment. See `WRITEUP.md` for the one-page summary of priorities and trade-offs, and `docs/API.md` for the full endpoint reference.
+`WRITEUP.md` has the short version of what I prioritized and what I'd do
+differently with more time. `docs/API.md` has every endpoint.
 
 ## Stack
 
-| Layer | Choice | Why |
-|---|---|---|
-| Frontend | React 18 + Vite, plain CSS | Fast dev loop, no framework ceremony for a scoped admin/author UI |
-| Backend | Node.js + Express | Minimal, explicit middleware chain, easy to review |
-| Database | SQLite (`better-sqlite3`) | Zero setup for a reviewer: no DB server to install or provision, file-based, synchronous API keeps the code simple. Schema design (see below) is what's being evaluated, not the engine |
-| Real-time | Socket.IO | Room-per-user and room-per-ticket, simplest model that satisfies "update without refreshing" |
-| Auth | JWT + bcrypt | Email/password only, per the assignment's scope |
-| AI | Anthropic Claude (`claude-3-5-haiku`) | See "AI Integration" below |
+- Frontend: React + Vite, plain CSS (no Tailwind, didn't need it for this)
+- Backend: Node/Express
+- DB: SQLite via better-sqlite3. Chose it so there's nothing to install or
+  spin up to run this, just `npm run migrate`. Schema is plain relational
+  SQL, moving to Postgres later is just a connection string change.
+- Real-time: Socket.IO, rooms per user/ticket plus a role:admin room
+- Auth: JWT + bcrypt, email/password
+- AI: Anthropic Claude (claude-3-5-haiku)
 
-## Project layout
+## Running it
 
-```
-backend/
-  src/
-    config/       env loading
-    db/           schema.sql, migrate.js, seed.js, connection.js
-    middleware/    auth, validation, error handling
-    services/      business logic (auth, book, ticket, ai, knowledgeBase)
-    controllers/   thin HTTP adapters over services
-    routes/        route tables + per-route auth/validation wiring
-    sockets/       Socket.IO server + a small pub/sub bus services use to emit
-    validators/    zod schemas
-  data/            bookleaf_sample_data.json (seed source)
-frontend/
-  src/
-    api/           axios client + typed endpoint functions
-    context/       Auth + Socket React contexts
-    components/    shared UI (badges, layout/nav)
-    pages/         author/ and admin/ route screens, shared TicketDetail
-docs/API.md        full endpoint reference
-WRITEUP.md         1-page approach/trade-offs note
-```
-
-## Local setup
-
-Requires Node.js 18+.
+Needs Node 18+.
 
 ```bash
-# from the repo root
-npm install              # installs both workspaces (backend + frontend)
+npm install
 
 cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env
-# edit backend/.env and add ANTHROPIC_API_KEY if you want live AI features
-# (the app runs fine without it, see "Graceful degradation" below)
+# add ANTHROPIC_API_KEY to backend/.env if you have one.
+# it runs fine without it too, see the AI section below.
 
-npm run migrate          # creates backend/data/bookleaf.db and applies schema.sql
-npm run seed             # loads bookleaf_sample_data.json + creates admin accounts
+npm run migrate
+npm run seed
 
-npm run dev              # runs backend (:4000) and frontend (:5173) together
+npm run dev   # backend on :4000, frontend on :5173
 ```
 
-Open `http://localhost:5173`.
+Then open localhost:5173.
 
-### Test credentials
+Logins after seeding:
+- admin@bookleaf.com / admin123
+- priya.sharma@email.com / bookleaf123 (every seeded author uses this same
+  password, it's just a seed-script shortcut, not a real decision)
 
-| Role | Email | Password |
-|---|---|---|
-| Admin | `admin@bookleaf.com` | `admin123` |
-| Admin | `support@bookleaf.com` | `admin123` |
-| Author | `priya.sharma@email.com` | `bookleaf123` |
-| Author | *(any author email from `bookleaf_sample_data.json`)* | `bookleaf123` |
+To run them separately: `npm run dev -w backend` and `npm run dev -w frontend`.
 
-Every seeded author shares the same password (`SEED_AUTHOR_PASSWORD` in `.env`); this is a seed-script convenience for a reviewer, not a real auth decision.
+## Layout
 
-### Running the pieces separately
-
-```bash
-npm run dev -w backend     # API on :4000
-npm run dev -w frontend    # Vite dev server on :5173
+```
+backend/src/
+  config/       env loading
+  db/           schema.sql, migrate + seed scripts
+  middleware/   auth, validation, error handler
+  services/     auth, book, ticket, ai, knowledgeBase - business logic lives here
+  controllers/  thin, just call into services
+  routes/       routes + which middleware guards them
+  sockets/      socket.io server + a small emit helper services use
+  validators/   zod schemas
+frontend/src/
+  api/          axios client + endpoint functions
+  context/      auth + socket context
+  pages/        author/, admin/, and a shared TicketDetail both roles use
+docs/API.md
+WRITEUP.md
 ```
 
-## Architecture decisions
+## A few decisions worth explaining
 
-- **Two roles, one `users` table.** An author and an admin are both just a user with a role flag; the schema doesn't gain anything by splitting them, since RBAC is enforced in middleware/services, not by table shape.
-- **`book_id` is nullable on `tickets`.** A null book means "General / Account Level," per the spec, rather than a magic sentinel row or a separate ticket type.
-- **Service layer owns business rules; controllers stay thin.** `ticket.service.js` is where ownership checks, AI calls, status transitions, and real-time emits happen, so the HTTP layer is just request/response plumbing. This is also where most of the "AI integration quality" and "architecture" evaluation criteria live.
-- **A ticket's "original query" lives on the ticket row itself** (`subject`/`description`), not as the first row in `ticket_messages`. The message thread is purely the back-and-forth after that; it keeps "the original query vs. replies" unambiguous, which the spec calls out explicitly.
-- **Socket.IO rooms, not a message queue.** `user:<id>`, `ticket:<id>`, and `role:admin` rooms are enough to satisfy every real-time requirement in the spec without adding infrastructure (Redis adapter, etc.) that a single-process demo doesn't need. A production version with multiple API instances would need the Redis adapter for Socket.IO; noted in Limitations.
-- **Status auto-advances `Open` to `In Progress`** the first time an admin sends a non-internal reply. Small UX default so the queue doesn't fill up with tickets that have actually been responded to.
+**One users table for both roles.** Author and admin are the same shape
+of row with a role flag. Splitting them into two tables wouldn't buy
+anything since access control happens in middleware, not in the schema.
 
-## AI integration
+**`tickets.book_id` is nullable.** Null means "General / Account Level."
+Didn't want a separate ticket type or a fake placeholder book row for
+that case.
 
-### Where AI is used
+**The original query lives on the ticket row itself**, not as the first
+message in the thread. `ticket_messages` is purely the back-and-forth
+after the ticket was opened. Keeps "what the author originally asked"
+and "the conversation" unambiguous instead of special-casing message #1.
 
-1. **Classification + priority** (`POST /tickets`): one Claude call, using **tool use** (forced function-calling) so the response is a validated enum, not free text to parse.
-2. **Draft response** (`GET /tickets/:id/draft`): generated on demand, grounded in a knowledge-base excerpt scoped to the ticket's category plus the tone rules from the assignment brief.
+**Status moves Open -> In Progress automatically** the first time an
+admin sends a real (non-internal) reply. Didn't want a queue full of
+tickets that have actually been answered but still show as Open because
+nobody flipped the dropdown.
 
-### Prompt design
+**Socket.IO with plain rooms**, no queue, no Redis. `user:<id>`,
+`ticket:<id>`, `role:admin`. That's enough for a single backend process.
+If this ran on more than one instance you'd need the Redis adapter for
+rooms to work across them, I didn't add it since there's only one
+instance here.
 
-- Classification gets a short system prompt with an explicit priority rubric (what makes something Critical vs. Low) and a `classify_ticket` tool with an enum-constrained schema, so there's no "the model said Urgent but valid values are Critical/High/Medium/Low" failure mode.
-- Drafting gets the **company overview + only the knowledge-base section for that ticket's category** (`backend/src/services/knowledgeBase.js`), plus the tone guidelines lifted directly from the assignment ("acknowledge before solving," "own BookLeaf's mistakes directly," "always end with a next step"). The model is explicitly told not to invent dates/amounts it wasn't given.
+## The AI part
 
-### Cost awareness (this is deliberately visible, not just claimed)
+Two places it's used:
 
-- **One call, not two**, for classification + priority (`classifyTicket` uses a single tool-use request for both fields).
-- **Only the relevant KB section is sent**, not the whole knowledge base, every time a draft is generated (`getKnowledgeBaseExcerpt(category)`).
-- **Drafts are cached** on the ticket row (`ai_draft_response`). Reopening a ticket serves the cached draft for free; only an explicit "Regenerate" click re-spends tokens.
-- **No message history is replayed into the prompt.** The draft call uses only the ticket's own subject/description plus a one-line book-context summary, so prompt size doesn't grow with how long or old the ticket's conversation is. This is a real trade-off (see Limitations).
-- **Input is truncated** (`MAX_DESCRIPTION_CHARS = 2000`) and outputs are capped (`max_tokens`), so a single bad-actor ticket can't blow up the cost of one call.
-- Every AI call is logged to an `ai_invocations` table (model, status, input/output tokens, latency), specifically so cost and failure rate are inspectable, not just asserted in this README.
+1. When a ticket is created, one Claude call classifies it into a
+   category and a priority, using tool use so the model has to return a
+   value from the actual enum instead of free text I'd have to parse and
+   hope matches.
+2. When an admin opens a ticket, a draft reply gets generated (and
+   cached, see below) using the knowledge base section for that ticket's
+   category plus the tone the brief described (acknowledge first, own
+   BookLeaf's mistakes, give a real timeline, end with a next step). The
+   admin edits it before it goes out, nothing is auto-sent.
 
-### Error handling / graceful degradation
+A few things about how it's wired up, since this was the part I spent
+the most time on:
 
-With `ANTHROPIC_API_KEY` unset (or if the Anthropic API errors or rate-limits), the app does not break:
-- Ticket creation still succeeds; `category`/`priority` fall back to `General Inquiry`/`Medium` with `*_source: "fallback"`, and the ticket carries a visible `aiClassificationError` note so admins know it wasn't actually triaged by AI.
-- The draft endpoint returns `{ draft: null }`; the UI shows "AI draft unavailable, write a response manually" and the reply box works exactly as normal.
-- This was manually verified end-to-end with no API key configured (see `docs/API.md` is written against the real responses, and the commit history includes the fallback-mode test pass).
+- Classification and priority happen in **one call**, not two. There's
+  no real reason to pay for two round trips when the model can return
+  both fields from a single tool call.
+- The draft prompt only gets the knowledge-base section relevant to that
+  ticket's category (`knowledgeBase.js` splits it up), not the whole
+  document every time.
+- Drafts are cached on the ticket (`ai_draft_response`). Reopening a
+  ticket doesn't regenerate it, only an explicit "Regenerate" click does.
+- The draft prompt uses the ticket's own subject/description only, it
+  doesn't resend the whole message thread. That's a real trade-off, not
+  a free win, see the write-up for why.
+- Description text gets truncated before it's sent and output length is
+  capped, so one long or weird ticket can't spike the cost of a single call.
+- Every AI call (classification or draft) gets logged to an
+  `ai_invocations` table with model, token counts, latency, and
+  success/failure. Wanted actual numbers to point at instead of just
+  saying "it's cost aware" in a doc.
 
-### Model choice
+**If there's no API key, or Anthropic is down or rate-limiting:**
+ticket creation still works fine, it just falls back to General
+Inquiry / Medium with a visible note that AI classification didn't run.
+The draft endpoint returns `null` and the UI tells the admin to just
+write the reply themselves. Tested this by literally not setting the key
+and running the whole flow.
 
-`claude-3-5-haiku` (configurable via `ANTHROPIC_MODEL`): both AI tasks here (short classification, short grounded draft) don't need a frontier model's reasoning depth, and Haiku's latency/cost profile is a better match for a per-ticket, possibly-synchronous call in the request path.
+Model is `claude-3-5-haiku` (`ANTHROPIC_MODEL` in `.env` if you want to
+swap it). Classification and a short grounded draft don't need a bigger
+model, and Haiku is fast enough to sit in the request path for ticket
+creation without the author waiting around.
 
-## Known limitations / what I'd improve next
+## What's not done / what I'd fix next
 
-- **Draft generation doesn't see the conversation thread**, only the original query, by design (see Cost awareness). For a long-running ticket with several back-and-forth messages, a production version would summarize prior turns into a short rolling context instead of either resending everything or ignoring it entirely.
-- **File attachments are UI-only**, as explicitly scoped by the assignment; real upload would need object storage (S3-compatible) and virus scanning before anything else.
-- **SQLite is single-writer.** Fine for this scope and for review; a real deployment with concurrent admins would move to Postgres, which is a schema-compatible change (no SQL in the app uses SQLite-only syntax beyond `datetime('now')`).
-- **Socket.IO is single-process.** Horizontal scaling needs the Redis (or similar) adapter so rooms work across instances.
-- **No rate limiting on auth or ticket creation.** Would add `express-rate-limit` before any public deployment.
-- **No automated test suite.** Given the 5-day scope, manual + scripted end-to-end verification (including a real-time, two-session check) was prioritized over unit tests; see `WRITEUP.md`.
+- Draft replies don't see earlier messages in the thread, only the
+  original query. Fine for a first reply, less good on message 5 of a
+  long ticket. I'd summarize prior turns into a short note instead of
+  either resending the whole thread or ignoring it, given more time.
+- Attachments are filename + size only, no actual file storage. That
+  matches what was asked for, but it's worth saying out loud.
+- SQLite means one writer at a time. Not an issue here, would move to
+  Postgres for anything with real concurrent admins.
+- No rate limiting anywhere yet (login, ticket creation). Would add
+  before this went anywhere public.
+- No automated tests. I tested manually and with a couple of throwaway
+  Playwright scripts (login flows, RBAC boundaries, the AI fallback
+  path, and a two-browser check that replies actually show up live
+  without a refresh), but there's no test suite committed. Given the
+  time, I'd rather have a working, manually-verified app than partial
+  test coverage on code that might still be getting shaped.
 
-## Deployment
+## Deploying
 
-The backend serves the API and Socket.IO; the frontend is a static Vite build. Two reasonable options:
+Backend serves the API and the socket connection. Frontend is a static
+build. Simplest setup: have Express serve `frontend/dist` and deploy
+just the backend as one service, no CORS to deal with. Or deploy them
+separately (backend on Render/Railway, frontend on Vercel) and point
+`VITE_API_URL` / `CLIENT_ORIGIN` at each other.
 
-**Single service (simplest):** build the frontend, have Express serve `frontend/dist` as static files, deploy the backend alone (Render/Railway, one Node web service). No CORS to configure, one URL.
-
-**Two services:** deploy `backend/` to Render/Railway (set `CLIENT_ORIGIN` to the frontend's URL) and `frontend/` to Vercel/Netlify (set `VITE_API_URL` to the backend's URL). Simpler to reason about, two URLs to manage.
-
-Either way: set `ANTHROPIC_API_KEY`, a real `JWT_SECRET`, and run `npm run migrate && npm run seed` once against the deployed database before sharing the URL.
+Either way, set a real `JWT_SECRET` and `ANTHROPIC_API_KEY`, then run
+`npm run migrate && npm run seed` against the deployed DB once before
+sharing the link.
