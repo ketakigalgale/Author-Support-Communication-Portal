@@ -1,7 +1,5 @@
 -- BookLeaf Author Support & Communication Portal
--- SQLite schema. Kept deliberately small and normalized: two roles share one
--- users table (role flag) because the only real difference is which routes
--- they can hit, not their shape.
+
 
 CREATE TABLE IF NOT EXISTS users (
   id              INTEGER PRIMARY KEY AUTOINCREMENT,
