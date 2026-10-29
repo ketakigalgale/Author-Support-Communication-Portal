@@ -1,14 +1,18 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { db } from './connection.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-function migrate() {
+export function applySchema() {
   const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf-8');
   db.exec(schema);
   console.log('Database schema applied.');
 }
 
-migrate();
+// Only auto-run when invoked directly (`npm run migrate`), not when imported
+// by server.js for the on-boot auto-migrate step.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  applySchema();
+}

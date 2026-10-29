@@ -8,14 +8,20 @@ const client = isAiEnabled ? new GoogleGenAI({ apiKey: env.geminiApiKey }) : nul
 
 const MAX_DESCRIPTION_CHARS = 2000; // caps worst-case input tokens from an unusually long query
 
-const logInvocation = db.prepare(`
-  INSERT INTO ai_invocations (ticket_id, invocation_type, model, status, input_tokens, output_tokens, latency_ms, error_message)
-  VALUES (@ticket_id, @invocation_type, @model, @status, @input_tokens, @output_tokens, @latency_ms, @error_message)
-`);
+let logInvocationStatement = null;
 
 function recordInvocation(fields) {
   try {
-    logInvocation.run({
+    // Prepared lazily (on first use) rather than at module load time, since
+    // this module is imported before server.js applies the schema on a
+    // fresh/empty database (e.g. right after a free-tier host wipes local
+    // disk on restart) - preparing it eagerly would fail with "no such
+    // table" before the bootstrap ever gets a chance to create it.
+    logInvocationStatement ??= db.prepare(`
+      INSERT INTO ai_invocations (ticket_id, invocation_type, model, status, input_tokens, output_tokens, latency_ms, error_message)
+      VALUES (@ticket_id, @invocation_type, @model, @status, @input_tokens, @output_tokens, @latency_ms, @error_message)
+    `);
+    logInvocationStatement.run({
       model: null,
       input_tokens: null,
       output_tokens: null,

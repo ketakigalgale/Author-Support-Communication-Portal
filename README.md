@@ -71,6 +71,16 @@ WRITEUP.md
 
 ## A few decisions worth explaining
 
+**The server bootstraps its own database on startup.** `server.js` applies
+the schema and seeds demo data automatically if it finds an empty database,
+instead of requiring `npm run migrate && npm run seed` to have been run
+first. This matters for deployment: Render's free web services (and most
+free tiers) have an ephemeral filesystem, meaning local disk gets wiped on
+every restart, redeploy, or idle spin-down. Without this, a routine restart
+would silently leave the live demo with an empty database. `npm run migrate`
+/ `npm run seed` still work standalone too, for resetting to a clean slate
+on purpose during local dev.
+
 **One users table for both roles.** Author and admin are the same shape
 of row with a role flag. Splitting them into two tables wouldn't buy
 anything since access control happens in middleware, not in the schema.
@@ -168,11 +178,17 @@ created without the author noticing a delay.
 ## Deploying
 
 Backend serves the API and the socket connection. Frontend is a static
-build. Simplest setup: have Express serve `frontend/dist` and deploy
-just the backend as one service, no CORS to deal with. Or deploy them
-separately (backend on Render/Railway, frontend on Vercel) and point
-`VITE_API_URL` / `CLIENT_ORIGIN` at each other.
+build. Simplest setup (what this repo is actually set up for): build the
+frontend, then deploy just the backend as one service - `app.js` detects a
+`frontend/dist` folder next to it and serves it directly, falling back to
+`index.html` for client-side routes. One URL, no CORS to configure. Build
+command: `npm install && npm run build`. Start command: `npm start -w backend`.
 
-Either way, set a real `JWT_SECRET` and `GEMINI_API_KEY`, then run
-`npm run migrate && npm run seed` against the deployed DB once before
-sharing the link.
+Or deploy them separately (backend on Render/Railway, frontend on Vercel)
+and point `VITE_API_URL` / `CLIENT_ORIGIN` at each other.
+
+Either way, set a real `JWT_SECRET` and `GEMINI_API_KEY`. You don't need to
+run `migrate`/`seed` against the deployed instance by hand - the server
+bootstraps its own schema and seed data on startup if it finds the database
+empty, which also means it recovers automatically if the host's free tier
+wipes local disk on a restart (see "A few decisions worth explaining" above).

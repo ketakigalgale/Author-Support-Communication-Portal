@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import bcrypt from 'bcryptjs';
 import { db } from './connection.js';
 import { env } from '../config/env.js';
@@ -95,7 +95,7 @@ function seedAuthorsAndBooks() {
   return authors.length;
 }
 
-function run() {
+export function seedDatabase() {
   console.log('Resetting tables...');
   resetTables();
   console.log('Seeding admin accounts...');
@@ -110,4 +110,8 @@ function run() {
   console.log('  (every seeded author shares the same password above)');
 }
 
-run();
+// Only auto-run when invoked directly (`npm run seed`), not when imported
+// by server.js for the on-boot auto-seed check.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  seedDatabase();
+}
