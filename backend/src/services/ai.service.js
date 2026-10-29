@@ -171,7 +171,7 @@ export async function generateDraftResponse({ ticketId, subject, description, ca
       contents: userMessage,
       config: {
         systemInstruction: DRAFT_SYSTEM_PROMPT_TEMPLATE(getKnowledgeBaseExcerpt(category)),
-
+        maxOutputTokens: 600,
         thinkingConfig: { thinkingBudget: 0 },
       },
     });
