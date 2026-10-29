@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CATEGORIES } from '../services/knowledgeBase.js';
+import { CATEGORIES, PRIORITIES, STATUSES } from '../constants.js';
 
 export const createTicketSchema = z.object({
   bookId: z.coerce.number().int().positive().nullable().optional().default(null),
@@ -20,17 +20,17 @@ export const addMessageSchema = z.object({
 
 export const updateTicketSchema = z
   .object({
-    status: z.enum(['Open', 'In Progress', 'Resolved', 'Closed']).optional(),
+    status: z.enum(STATUSES).optional(),
     category: z.enum(CATEGORIES).optional(),
-    priority: z.enum(['Critical', 'High', 'Medium', 'Low']).optional(),
+    priority: z.enum(PRIORITIES).optional(),
     assignToSelf: z.literal(true).optional(),
   })
   .refine((data) => Object.keys(data).length > 0, { message: 'At least one field must be provided' });
 
 export const ticketQuerySchema = z.object({
-  status: z.enum(['Open', 'In Progress', 'Resolved', 'Closed']).optional(),
+  status: z.enum(STATUSES).optional(),
   category: z.enum(CATEGORIES).optional(),
-  priority: z.enum(['Critical', 'High', 'Medium', 'Low']).optional(),
+  priority: z.enum(PRIORITIES).optional(),
   from: z.string().optional(),
   to: z.string().optional(),
   page: z.coerce.number().int().positive().optional().default(1),

@@ -1,7 +1,8 @@
 import { GoogleGenAI, FunctionCallingConfigMode } from '@google/genai';
 import { env, isAiEnabled } from '../config/env.js';
 import { db } from '../db/connection.js';
-import { CATEGORIES, TONE_GUIDELINES, getKnowledgeBaseExcerpt } from './knowledgeBase.js';
+import { TONE_GUIDELINES, getKnowledgeBaseExcerpt } from './knowledgeBase.js';
+import { CATEGORIES, PRIORITIES } from '../constants.js';
 
 const client = isAiEnabled ? new GoogleGenAI({ apiKey: env.geminiApiKey }) : null;
 
@@ -34,7 +35,7 @@ const CLASSIFY_FUNCTION = {
     type: 'object',
     properties: {
       category: { type: 'string', enum: CATEGORIES },
-      priority: { type: 'string', enum: ['Critical', 'High', 'Medium', 'Low'] },
+      priority: { type: 'string', enum: PRIORITIES },
       reasoning: { type: 'string', description: 'One short sentence explaining the priority call.' },
     },
     required: ['category', 'priority', 'reasoning'],

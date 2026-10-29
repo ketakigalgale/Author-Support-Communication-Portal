@@ -47,6 +47,9 @@ CREATE TABLE IF NOT EXISTS tickets (
   description        TEXT NOT NULL,
   attachments         TEXT NOT NULL DEFAULT '[]', -- JSON array of {name, size}, UI-only, no file bytes stored
 
+  -- category/priority/status values below must match src/constants.js -
+  -- SQL can't import from JS, so this is the one place those lists are
+  -- necessarily duplicated rather than shared.
   category            TEXT NOT NULL DEFAULT 'General Inquiry',
   category_source      TEXT NOT NULL DEFAULT 'ai' CHECK (category_source IN ('ai', 'admin', 'fallback')),
   priority             TEXT NOT NULL DEFAULT 'Medium' CHECK (priority IN ('Critical', 'High', 'Medium', 'Low')),

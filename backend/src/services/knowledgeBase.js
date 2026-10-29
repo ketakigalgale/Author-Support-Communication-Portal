@@ -2,14 +2,7 @@
 // service can inject only the relevant slice into a prompt instead of the
 // entire knowledge base on every call (see ai.service.js for how this is used).
 
-export const CATEGORIES = [
-  'Royalty & Payments',
-  'ISBN & Metadata Issues',
-  'Printing & Quality',
-  'Distribution & Availability',
-  'Book Status & Production Updates',
-  'General Inquiry',
-];
+export { CATEGORIES } from '../constants.js';
 
 export const COMPANY_OVERVIEW = `
 BookLeaf Publishing is a self-publishing company operating in India and the US.

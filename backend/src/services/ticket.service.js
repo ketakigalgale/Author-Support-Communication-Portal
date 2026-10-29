@@ -5,8 +5,15 @@ import { assertBookBelongsToAuthor, getBookById } from './book.service.js';
 import { classifyTicket, generateDraftResponse } from './ai.service.js';
 import { emitToUser, emitToAdmins, emitToTicket } from '../sockets/bus.js';
 import { normalizePagination, buildPaginationMeta } from '../utils/pagination.js';
+import { STATUSES, PRIORITIES } from '../constants.js';
 
-const PRIORITY_RANK = { Critical: 0, High: 1, Medium: 2, Low: 3 };
+// Builds a SQL `CASE col WHEN 'a' THEN 0 WHEN 'b' THEN 1 ... ELSE n END` from
+// an ordered list, so the admin queue's sort order comes from the same
+// STATUSES/PRIORITIES arrays as validation instead of a second hardcoded copy.
+function sqlRankExpression(column, orderedValues) {
+  const whens = orderedValues.map((value, index) => `WHEN '${value}' THEN ${index}`).join(' ');
+  return `CASE ${column} ${whens} ELSE ${orderedValues.length} END`;
+}
 
 function serializeTicket(row) {
   return {
@@ -125,8 +132,8 @@ export function listTicketsForAuthor(authorId, pagination = {}) {
 
 // Status/priority rank is computed in SQL (not JS) so LIMIT/OFFSET paginate
 // against the real sort order instead of an array that's already been cut down.
-const STATUS_RANK_SQL = `CASE t.status WHEN 'Open' THEN 0 WHEN 'In Progress' THEN 1 WHEN 'Resolved' THEN 2 ELSE 3 END`;
-const PRIORITY_RANK_SQL = `CASE t.priority WHEN 'Critical' THEN 0 WHEN 'High' THEN 1 WHEN 'Medium' THEN 2 ELSE 3 END`;
+const STATUS_RANK_SQL = sqlRankExpression('t.status', STATUSES);
+const PRIORITY_RANK_SQL = sqlRankExpression('t.priority', PRIORITIES);
 
 export function listTicketsForAdmin({ status, category, priority, from, to, page, pageSize } = {}) {
   const clauses = [];

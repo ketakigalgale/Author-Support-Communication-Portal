@@ -1,9 +1,9 @@
-import { CATEGORIES } from '../services/knowledgeBase.js';
+import { CATEGORIES, PRIORITIES, STATUSES } from '../constants.js';
 
 export function getMeta(req, res) {
   res.json({
     categories: CATEGORIES,
-    priorities: ['Critical', 'High', 'Medium', 'Low'],
-    statuses: ['Open', 'In Progress', 'Resolved', 'Closed'],
+    priorities: PRIORITIES,
+    statuses: STATUSES,
   });
 }
