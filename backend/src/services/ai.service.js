@@ -77,6 +77,7 @@ export async function classifyTicket({ ticketId, subject, description, bookTitle
       config: {
         systemInstruction: CLASSIFY_SYSTEM_PROMPT,
         maxOutputTokens: 200,
+        thinkingConfig: { thinkingBudget: 0 },
         tools: [{ functionDeclarations: [CLASSIFY_FUNCTION] }],
         toolConfig: {
           functionCallingConfig: {
@@ -137,6 +138,8 @@ ${kbExcerpt}
 
 Only state facts you were given above or in the ticket. Do not invent dates, amounts, or statuses
 that were not provided. If a specific figure is needed and not available, say the team will confirm it.
+When you cite a date that was given to you, copy it exactly, character for character, including the
+year - never retype it from memory or guess the year.
 `.trim();
 
 /**
@@ -167,7 +170,8 @@ export async function generateDraftResponse({ ticketId, subject, description, ca
       contents: userMessage,
       config: {
         systemInstruction: DRAFT_SYSTEM_PROMPT_TEMPLATE(getKnowledgeBaseExcerpt(category)),
-        maxOutputTokens: 400,
+
+        thinkingConfig: { thinkingBudget: 0 },
       },
     });
 
