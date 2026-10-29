@@ -1,13 +1,20 @@
 import { db } from '../db/connection.js';
 import { ApiError } from '../utils/ApiError.js';
+import { normalizePagination, buildPaginationMeta } from '../utils/pagination.js';
 
 function deserialize(book) {
   return { ...book, available_on: JSON.parse(book.available_on) };
 }
 
-export function listBooksForAuthor(authorId) {
-  const books = db.prepare('SELECT * FROM books WHERE author_id = ? ORDER BY publication_date DESC').all(authorId);
-  return books.map(deserialize);
+export function listBooksForAuthor(authorId, pagination = {}) {
+  const { page, pageSize, offset } = normalizePagination(pagination);
+
+  const { total } = db.prepare('SELECT COUNT(*) AS total FROM books WHERE author_id = ?').get(authorId);
+  const books = db
+    .prepare('SELECT * FROM books WHERE author_id = @authorId ORDER BY publication_date DESC LIMIT @pageSize OFFSET @offset')
+    .all({ authorId, pageSize, offset });
+
+  return { data: books.map(deserialize), pagination: buildPaginationMeta({ page, pageSize }, total) };
 }
 
 // Used by the ticket form (author's own books only) and by the admin ticket

@@ -60,7 +60,9 @@ Auth required. Returns the logged-in user's profile (id, email, role, name, phon
 ## Books
 
 ### `GET /books/my-books`
-Role: `author`. Returns the caller's own books (never another author's), with royalty and distribution details, exactly as recorded in `bookleaf_sample_data.json`.
+Role: `author`. Paginated (`page`, `pageSize`, same defaults as `GET /tickets`). Returns the caller's own
+books (never another author's), with royalty and distribution details, exactly as recorded in
+`bookleaf_sample_data.json`. Response shape: `{ "data": [...], "pagination": {...} }`.
 
 ---
 

@@ -1,17 +1,21 @@
 import { useEffect, useState } from 'react';
 import { bookApi } from '../../api/endpoints.js';
+import { Pagination } from '../../components/Pagination.jsx';
 import { formatCurrency, formatDate } from '../../utils/format.js';
 
 export function MyBooks() {
-  const [books, setBooks] = useState(null);
+  const [result, setResult] = useState(null);
+  const [page, setPage] = useState(1);
   const [error, setError] = useState('');
 
   useEffect(() => {
     bookApi
-      .myBooks()
-      .then(setBooks)
+      .myBooks({ page })
+      .then(setResult)
       .catch(() => setError('Could not load your books.'));
-  }, []);
+  }, [page]);
+
+  const books = result?.data;
 
   return (
     <div className="container">
@@ -32,11 +36,16 @@ export function MyBooks() {
           <p>No books on your account yet.</p>
         </div>
       ) : (
-        <div className="grid grid-books">
-          {books.map((book) => (
-            <BookCard key={book.id} book={book} />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-books">
+            {books.map((book) => (
+              <BookCard key={book.id} book={book} />
+            ))}
+          </div>
+          <div className="card" style={{ marginTop: 16, padding: 0 }}>
+            <Pagination {...result.pagination} onPageChange={setPage} />
+          </div>
+        </>
       )}
     </div>
   );

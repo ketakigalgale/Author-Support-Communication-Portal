@@ -4,20 +4,9 @@ import { nextTicketNumber } from '../utils/ticketNumber.js';
 import { assertBookBelongsToAuthor, getBookById } from './book.service.js';
 import { classifyTicket, generateDraftResponse } from './ai.service.js';
 import { emitToUser, emitToAdmins, emitToTicket } from '../sockets/bus.js';
+import { normalizePagination, buildPaginationMeta } from '../utils/pagination.js';
 
 const PRIORITY_RANK = { Critical: 0, High: 1, Medium: 2, Low: 3 };
-const DEFAULT_PAGE_SIZE = 20;
-const MAX_PAGE_SIZE = 100;
-
-function normalizePagination({ page, pageSize } = {}) {
-  const safePageSize = Math.min(Math.max(Number(pageSize) || DEFAULT_PAGE_SIZE, 1), MAX_PAGE_SIZE);
-  const safePage = Math.max(Number(page) || 1, 1);
-  return { page: safePage, pageSize: safePageSize, offset: (safePage - 1) * safePageSize };
-}
-
-function buildPaginationMeta({ page, pageSize }, total) {
-  return { page, pageSize, total, totalPages: Math.max(Math.ceil(total / pageSize), 1) };
-}
 
 function serializeTicket(row) {
   return {

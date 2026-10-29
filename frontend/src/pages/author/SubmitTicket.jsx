@@ -14,7 +14,10 @@ export function SubmitTicket() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    bookApi.myBooks().then(setBooks).catch(() => {});
+    // The dropdown needs every book the author has, not one page of them -
+    // pageSize is set to the API's max so this still works if an author
+    // somehow has more than the default page size.
+    bookApi.myBooks({ pageSize: 100 }).then((res) => setBooks(res.data)).catch(() => {});
   }, []);
 
   async function handleSubmit(e) {

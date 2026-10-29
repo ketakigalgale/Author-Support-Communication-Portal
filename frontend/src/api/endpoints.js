@@ -6,7 +6,7 @@ export const authApi = {
 };
 
 export const bookApi = {
-  myBooks: () => apiClient.get('/books/my-books').then((r) => r.data),
+  myBooks: (params) => apiClient.get('/books/my-books', { params }).then((r) => r.data),
 };
 
 export const metaApi = {
