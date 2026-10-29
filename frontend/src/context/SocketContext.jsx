@@ -19,7 +19,11 @@ export function SocketProvider({ children }) {
       return undefined;
     }
 
-    const instance = io(API_URL, { auth: { token }, transports: ['websocket', 'polling'] });
+    // socket.io-client connects to the current page's origin when given
+    // undefined, but treats an empty string differently - so an empty
+    // API_URL (same-origin deployment, see api/client.js) must become
+    // undefined here, not be passed through as-is.
+    const instance = io(API_URL || undefined, { auth: { token }, transports: ['websocket', 'polling'] });
     setSocket(instance);
 
     return () => {
