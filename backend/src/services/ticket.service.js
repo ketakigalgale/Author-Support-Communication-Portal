@@ -6,6 +6,18 @@ import { classifyTicket, generateDraftResponse } from './ai.service.js';
 import { emitToUser, emitToAdmins, emitToTicket } from '../sockets/bus.js';
 
 const PRIORITY_RANK = { Critical: 0, High: 1, Medium: 2, Low: 3 };
+const DEFAULT_PAGE_SIZE = 20;
+const MAX_PAGE_SIZE = 100;
+
+function normalizePagination({ page, pageSize } = {}) {
+  const safePageSize = Math.min(Math.max(Number(pageSize) || DEFAULT_PAGE_SIZE, 1), MAX_PAGE_SIZE);
+  const safePage = Math.max(Number(page) || 1, 1);
+  return { page: safePage, pageSize: safePageSize, offset: (safePage - 1) * safePageSize };
+}
+
+function buildPaginationMeta({ page, pageSize }, total) {
+  return { page, pageSize, total, totalPages: Math.max(Math.ceil(total / pageSize), 1) };
+}
 
 function serializeTicket(row) {
   return {
@@ -111,12 +123,23 @@ export function getTicketForUser(ticketId, requestingUser) {
   return serializeTicket(row);
 }
 
-export function listTicketsForAuthor(authorId) {
-  const rows = db.prepare(`${TICKET_SELECT} WHERE t.author_id = ? ORDER BY t.created_at DESC`).all(authorId);
-  return rows.map(serializeTicket);
+export function listTicketsForAuthor(authorId, pagination = {}) {
+  const { page, pageSize, offset } = normalizePagination(pagination);
+
+  const { total } = db.prepare('SELECT COUNT(*) AS total FROM tickets WHERE author_id = ?').get(authorId);
+  const rows = db
+    .prepare(`${TICKET_SELECT} WHERE t.author_id = @authorId ORDER BY t.created_at DESC LIMIT @pageSize OFFSET @offset`)
+    .all({ authorId, pageSize, offset });
+
+  return { data: rows.map(serializeTicket), pagination: buildPaginationMeta({ page, pageSize }, total) };
 }
 
-export function listTicketsForAdmin({ status, category, priority, from, to } = {}) {
+// Status/priority rank is computed in SQL (not JS) so LIMIT/OFFSET paginate
+// against the real sort order instead of an array that's already been cut down.
+const STATUS_RANK_SQL = `CASE t.status WHEN 'Open' THEN 0 WHEN 'In Progress' THEN 1 WHEN 'Resolved' THEN 2 ELSE 3 END`;
+const PRIORITY_RANK_SQL = `CASE t.priority WHEN 'Critical' THEN 0 WHEN 'High' THEN 1 WHEN 'Medium' THEN 2 ELSE 3 END`;
+
+export function listTicketsForAdmin({ status, category, priority, from, to, page, pageSize } = {}) {
   const clauses = [];
   const params = {};
 
@@ -127,20 +150,21 @@ export function listTicketsForAdmin({ status, category, priority, from, to } = {
   if (to) { clauses.push('date(t.created_at) <= date(@to)'); params.to = to; }
 
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
-  const rows = db.prepare(`${TICKET_SELECT} ${where}`).all(params);
+  const pg = normalizePagination({ page, pageSize });
+
+  const { total } = db.prepare(`SELECT COUNT(*) AS total FROM tickets t ${where}`).get(params);
 
   // Oldest + most urgent first: open/in-progress tickets surface above
   // resolved/closed ones, ranked by priority, then by age within each rank.
-  const statusRank = (s) => (s === 'Open' ? 0 : s === 'In Progress' ? 1 : s === 'Resolved' ? 2 : 3);
-  rows.sort((a, b) => {
-    const statusDiff = statusRank(a.status) - statusRank(b.status);
-    if (statusDiff !== 0) return statusDiff;
-    const priorityDiff = PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
-    if (priorityDiff !== 0) return priorityDiff;
-    return new Date(a.created_at) - new Date(b.created_at);
-  });
+  const rows = db
+    .prepare(`
+      ${TICKET_SELECT} ${where}
+      ORDER BY ${STATUS_RANK_SQL} ASC, ${PRIORITY_RANK_SQL} ASC, t.created_at ASC
+      LIMIT @pageSize OFFSET @offset
+    `)
+    .all({ ...params, pageSize: pg.pageSize, offset: pg.offset });
 
-  return rows.map(serializeTicket);
+  return { data: rows.map(serializeTicket), pagination: buildPaginationMeta(pg, total) };
 }
 
 function touchTicket(ticketId) {

@@ -86,17 +86,28 @@ On creation, the ticket is run through AI classification (category + priority). 
 Response: the created ticket object (see shape below).
 
 ### `GET /tickets`
-Both roles.
+Both roles. Paginated.
 - As an **author**: returns only the caller's own tickets.
 - As an **admin**: returns all tickets, filterable via query params, sorted so open/urgent/oldest tickets surface first.
 
-Query params (admin only, all optional):
+Query params (all optional):
 | Param | Values |
 |---|---|
-| `status` | `Open` \| `In Progress` \| `Resolved` \| `Closed` |
-| `category` | one of the six categories (see `GET /meta`) |
-| `priority` | `Critical` \| `High` \| `Medium` \| `Low` |
-| `from` / `to` | `YYYY-MM-DD`, inclusive date range on `created_at` |
+| `status` | `Open` \| `In Progress` \| `Resolved` \| `Closed` (admin only - ignored for authors) |
+| `category` | one of the six categories, admin only (see `GET /meta`) |
+| `priority` | `Critical` \| `High` \| `Medium` \| `Low`, admin only |
+| `from` / `to` | `YYYY-MM-DD`, inclusive date range on `created_at`, admin only |
+| `page` | default `1` |
+| `pageSize` | default `20`, max `100` |
+
+Response shape:
+```json
+{
+  "data": [ { "id": 1, "ticketNumber": "TCK-0001", "...": "..." } ],
+  "pagination": { "page": 1, "pageSize": 20, "total": 143, "totalPages": 8 }
+}
+```
+Sorting (admin view) and pagination both happen in SQL, so `LIMIT`/`OFFSET` apply to the real sort order, not to an array that's already been filtered down in JS.
 
 ### `GET /tickets/:ticketId`
 Both roles. Authors get a 403 if the ticket isn't theirs.

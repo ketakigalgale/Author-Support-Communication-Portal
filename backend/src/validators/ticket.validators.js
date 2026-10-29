@@ -33,6 +33,8 @@ export const ticketQuerySchema = z.object({
   priority: z.enum(['Critical', 'High', 'Medium', 'Low']).optional(),
   from: z.string().optional(),
   to: z.string().optional(),
+  page: z.coerce.number().int().positive().optional().default(1),
+  pageSize: z.coerce.number().int().positive().max(100).optional().default(20),
 });
 
 export const draftQuerySchema = z.object({

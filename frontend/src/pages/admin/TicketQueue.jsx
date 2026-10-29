@@ -2,19 +2,21 @@ import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { ticketApi, metaApi } from '../../api/endpoints.js';
 import { StatusBadge, PriorityBadge } from '../../components/Badges.jsx';
+import { Pagination } from '../../components/Pagination.jsx';
 import { formatDateTime } from '../../utils/format.js';
 import { useSocket } from '../../context/SocketContext.jsx';
 
 export function TicketQueue() {
-  const [tickets, setTickets] = useState(null);
+  const [result, setResult] = useState(null);
   const [meta, setMeta] = useState(null);
   const [filters, setFilters] = useState({ status: '', category: '', priority: '', from: '', to: '' });
+  const [page, setPage] = useState(1);
   const socket = useSocket();
 
   const load = useCallback(() => {
-    const params = Object.fromEntries(Object.entries(filters).filter(([, v]) => v));
-    ticketApi.list(params).then(setTickets);
-  }, [filters]);
+    const params = { ...Object.fromEntries(Object.entries(filters).filter(([, v]) => v)), page };
+    ticketApi.list(params).then(setResult);
+  }, [filters, page]);
 
   useEffect(() => {
     metaApi.get().then(setMeta);
@@ -38,7 +40,15 @@ export function TicketQueue() {
 
   function setFilter(key, value) {
     setFilters((prev) => ({ ...prev, [key]: value }));
+    setPage(1); // a changed filter invalidates whatever page we were on
   }
+
+  function clearFilters() {
+    setFilters({ status: '', category: '', priority: '', from: '', to: '' });
+    setPage(1);
+  }
+
+  const tickets = result?.data;
 
   return (
     <div className="container">
@@ -84,10 +94,7 @@ export function TicketQueue() {
             onChange={(e) => setFilter('to', e.target.value)}
           />
           {(filters.status || filters.category || filters.priority || filters.from || filters.to) && (
-            <button
-              className="btn btn-ghost btn-sm"
-              onClick={() => setFilters({ status: '', category: '', priority: '', from: '', to: '' })}
-            >
+            <button className="btn btn-ghost btn-sm" onClick={clearFilters}>
               Clear
             </button>
           )}
@@ -132,6 +139,7 @@ export function TicketQueue() {
               <div><StatusBadge status={t.status} /></div>
             </Link>
           ))}
+          <Pagination {...result.pagination} onPageChange={setPage} />
         </div>
       )}
     </div>

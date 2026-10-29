@@ -1,28 +1,36 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ticketApi } from '../../api/endpoints.js';
 import { StatusBadge, PriorityBadge } from '../../components/Badges.jsx';
+import { Pagination } from '../../components/Pagination.jsx';
 import { formatDateTime } from '../../utils/format.js';
 import { useSocket } from '../../context/SocketContext.jsx';
 
 export function MyTickets() {
-  const [tickets, setTickets] = useState(null);
+  const [result, setResult] = useState(null);
+  const [page, setPage] = useState(1);
   const socket = useSocket();
 
+  const load = useCallback((targetPage = page) => {
+    ticketApi.list({ page: targetPage }).then(setResult);
+  }, [page]);
+
   useEffect(() => {
-    ticketApi.list().then(setTickets);
-  }, []);
+    load(page);
+  }, [page]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!socket) return undefined;
-    const refresh = () => ticketApi.list().then(setTickets);
+    const refresh = () => load(page);
     socket.on('ticket:message', refresh);
     socket.on('ticket:updated', refresh);
     return () => {
       socket.off('ticket:message', refresh);
       socket.off('ticket:updated', refresh);
     };
-  }, [socket]);
+  }, [socket, page]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const tickets = result?.data;
 
   return (
     <div className="container">
@@ -66,6 +74,7 @@ export function MyTickets() {
               <div><StatusBadge status={t.status} /></div>
             </Link>
           ))}
+          <Pagination {...result.pagination} onPageChange={setPage} />
         </div>
       )}
     </div>

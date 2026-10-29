@@ -7,11 +7,11 @@ export const createTicket = asyncHandler(async (req, res) => {
 });
 
 export const listTickets = asyncHandler(async (req, res) => {
-  const tickets =
+  const result =
     req.user.role === 'admin'
       ? ticketService.listTicketsForAdmin(req.query)
-      : ticketService.listTicketsForAuthor(req.user.id);
-  res.json(tickets);
+      : ticketService.listTicketsForAuthor(req.user.id, req.query);
+  res.json(result);
 });
 
 export const getTicket = asyncHandler(async (req, res) => {
