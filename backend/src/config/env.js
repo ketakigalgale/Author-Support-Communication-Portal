@@ -26,8 +26,8 @@ export const env = {
   seedAuthorPassword: process.env.SEED_AUTHOR_PASSWORD ?? 'bookleaf123',
   seedAdminPassword: process.env.SEED_ADMIN_PASSWORD ?? 'admin123',
 
-  anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? '',
-  anthropicModel: process.env.ANTHROPIC_MODEL ?? 'claude-3-5-haiku-20241022',
+  geminiApiKey: process.env.GEMINI_API_KEY ?? '',
+  geminiModel: process.env.GEMINI_MODEL ?? 'gemini-2.5-flash',
 };
 
-export const isAiEnabled = Boolean(env.anthropicApiKey);
+export const isAiEnabled = Boolean(env.geminiApiKey);

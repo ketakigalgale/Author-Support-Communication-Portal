@@ -8,5 +8,5 @@ initSocket(httpServer);
 
 httpServer.listen(env.port, () => {
   console.log(`BookLeaf API listening on http://localhost:${env.port}`);
-  console.log(`AI integration: ${isAiEnabled ? `enabled (${env.anthropicModel})` : 'disabled (no ANTHROPIC_API_KEY set), running in fallback mode'}`);
+  console.log(`AI integration: ${isAiEnabled ? `enabled (${env.geminiModel})` : 'disabled (no GEMINI_API_KEY set), running in fallback mode'}`);
 });

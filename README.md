@@ -2,7 +2,7 @@
 
 Support ticket system for BookLeaf Publishing. Authors log in to see their
 books and raise tickets about royalties, ISBNs, printing, whatever. Admins
-get a queue, and an AI layer (Claude) tags each ticket with a category and
+get a queue, and an AI layer (Gemini) tags each ticket with a category and
 priority and drafts a reply using BookLeaf's actual policies, which the
 admin edits before sending.
 
@@ -18,7 +18,8 @@ differently with more time. `docs/API.md` has every endpoint.
   SQL, moving to Postgres later is just a connection string change.
 - Real-time: Socket.IO, rooms per user/ticket plus a role:admin room
 - Auth: JWT + bcrypt, email/password
-- AI: Anthropic Claude (claude-3-5-haiku)
+- AI: Google Gemini (gemini-2.5-flash), picked because it has a genuine
+  free tier (no card required), see Model Choice below
 
 ## Running it
 
@@ -29,7 +30,8 @@ npm install
 
 cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env
-# add ANTHROPIC_API_KEY to backend/.env if you have one.
+# add GEMINI_API_KEY to backend/.env if you have one (free, no card,
+# from aistudio.google.com).
 # it runs fine without it too, see the AI section below.
 
 npm run migrate
@@ -97,10 +99,11 @@ instance here.
 
 Two places it's used:
 
-1. When a ticket is created, one Claude call classifies it into a
-   category and a priority, using tool use so the model has to return a
-   value from the actual enum instead of free text I'd have to parse and
-   hope matches.
+1. When a ticket is created, one Gemini call classifies it into a
+   category and a priority, using function calling (forced, via
+   `FunctionCallingConfigMode.ANY`) so the model has to return a value
+   from the actual enum instead of free text I'd have to parse and hope
+   matches.
 2. When an admin opens a ticket, a draft reply gets generated (and
    cached, see below) using the knowledge base section for that ticket's
    category plus the tone the brief described (acknowledge first, own
@@ -111,8 +114,8 @@ A few things about how it's wired up, since this was the part I spent
 the most time on:
 
 - Classification and priority happen in **one call**, not two. There's
-  no real reason to pay for two round trips when the model can return
-  both fields from a single tool call.
+  no real reason to spend two round trips when the model can return
+  both fields from a single function call.
 - The draft prompt only gets the knowledge-base section relevant to that
   ticket's category (`knowledgeBase.js` splits it up), not the whole
   document every time.
@@ -128,17 +131,20 @@ the most time on:
   success/failure. Wanted actual numbers to point at instead of just
   saying "it's cost aware" in a doc.
 
-**If there's no API key, or Anthropic is down or rate-limiting:**
+**If there's no API key, or Gemini is down or rate-limiting:**
 ticket creation still works fine, it just falls back to General
 Inquiry / Medium with a visible note that AI classification didn't run.
 The draft endpoint returns `null` and the UI tells the admin to just
 write the reply themselves. Tested this by literally not setting the key
 and running the whole flow.
 
-Model is `claude-3-5-haiku` (`ANTHROPIC_MODEL` in `.env` if you want to
-swap it). Classification and a short grounded draft don't need a bigger
-model, and Haiku is fast enough to sit in the request path for ticket
-creation without the author waiting around.
+**Model choice:** Gemini 2.5 Flash (`GEMINI_MODEL` in `.env` if you want
+to swap it). Two reasons: it's free to use at aistudio.google.com with
+no credit card, which mattered since I didn't want this assignment to
+need paid API access to run or demo; and functionally, classification
+into a fixed enum and a short grounded draft don't need a frontier
+model, Flash is fast enough to sit in the request path when a ticket is
+created without the author noticing a delay.
 
 ## What's not done / what I'd fix next
 
@@ -167,6 +173,6 @@ just the backend as one service, no CORS to deal with. Or deploy them
 separately (backend on Render/Railway, frontend on Vercel) and point
 `VITE_API_URL` / `CLIENT_ORIGIN` at each other.
 
-Either way, set a real `JWT_SECRET` and `ANTHROPIC_API_KEY`, then run
+Either way, set a real `JWT_SECRET` and `GEMINI_API_KEY`, then run
 `npm run migrate && npm run seed` against the deployed DB once before
 sharing the link.

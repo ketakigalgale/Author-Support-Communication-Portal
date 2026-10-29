@@ -1,9 +1,9 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenAI, FunctionCallingConfigMode } from '@google/genai';
 import { env, isAiEnabled } from '../config/env.js';
 import { db } from '../db/connection.js';
 import { CATEGORIES, TONE_GUIDELINES, getKnowledgeBaseExcerpt } from './knowledgeBase.js';
 
-const client = isAiEnabled ? new Anthropic({ apiKey: env.anthropicApiKey }) : null;
+const client = isAiEnabled ? new GoogleGenAI({ apiKey: env.geminiApiKey }) : null;
 
 const MAX_DESCRIPTION_CHARS = 2000; // caps worst-case input tokens from an unusually long query
 
@@ -27,10 +27,10 @@ function recordInvocation(fields) {
   }
 }
 
-const CLASSIFY_TOOL = {
+const CLASSIFY_FUNCTION = {
   name: 'classify_ticket',
   description: 'Classify a BookLeaf author support ticket into a category and a priority.',
-  input_schema: {
+  parametersJsonSchema: {
     type: 'object',
     properties: {
       category: { type: 'string', enum: CATEGORIES },
@@ -48,7 +48,7 @@ Pick exactly one category from the enum provided, and a priority:
 - High: a clear service failure affecting one book (bad print quality, long unexplained delay).
 - Medium: a real issue but not urgent or not yet overdue (e.g. "royalty seems low", status check within normal timelines).
 - Low: account/informational questions with no urgency (e.g. "can I update my bio").
-Use the classify_ticket tool. Do not include any text outside the tool call.
+Call the classify_ticket function with your answer. Do not respond with plain text.
 `.trim();
 
 /**
@@ -71,38 +71,45 @@ export async function classifyTicket({ ticketId, subject, description, bookTitle
 
   const startedAt = Date.now();
   try {
-    const response = await client.messages.create({
-      model: env.anthropicModel,
-      max_tokens: 200,
-      system: CLASSIFY_SYSTEM_PROMPT,
-      tools: [CLASSIFY_TOOL],
-      tool_choice: { type: 'tool', name: 'classify_ticket' },
-      messages: [{ role: 'user', content: userMessage }],
+    const response = await client.models.generateContent({
+      model: env.geminiModel,
+      contents: userMessage,
+      config: {
+        systemInstruction: CLASSIFY_SYSTEM_PROMPT,
+        maxOutputTokens: 200,
+        tools: [{ functionDeclarations: [CLASSIFY_FUNCTION] }],
+        toolConfig: {
+          functionCallingConfig: {
+            mode: FunctionCallingConfigMode.ANY,
+            allowedFunctionNames: ['classify_ticket'],
+          },
+        },
+      },
     });
 
-    const toolUse = response.content.find((block) => block.type === 'tool_use');
-    if (!toolUse) throw new Error('Model did not return a tool_use block');
+    const call = response.functionCalls?.[0];
+    if (!call) throw new Error('Model did not return a function call');
 
     recordInvocation({
       ticket_id: ticketId,
       invocation_type: 'classification',
-      model: env.anthropicModel,
+      model: env.geminiModel,
       status: 'success',
-      input_tokens: response.usage?.input_tokens ?? null,
-      output_tokens: response.usage?.output_tokens ?? null,
+      input_tokens: response.usageMetadata?.promptTokenCount ?? null,
+      output_tokens: response.usageMetadata?.candidatesTokenCount ?? null,
       latency_ms: Date.now() - startedAt,
     });
 
     return {
-      category: toolUse.input.category,
-      priority: toolUse.input.priority,
+      category: call.args.category,
+      priority: call.args.priority,
       source: 'ai',
     };
   } catch (err) {
     recordInvocation({
       ticket_id: ticketId,
       invocation_type: 'classification',
-      model: env.anthropicModel,
+      model: env.geminiModel,
       status: 'error',
       latency_ms: Date.now() - startedAt,
       error_message: err.message,
@@ -155,31 +162,31 @@ export async function generateDraftResponse({ ticketId, subject, description, ca
 
   const startedAt = Date.now();
   try {
-    const response = await client.messages.create({
-      model: env.anthropicModel,
-      max_tokens: 400,
-      system: DRAFT_SYSTEM_PROMPT_TEMPLATE(getKnowledgeBaseExcerpt(category)),
-      messages: [{ role: 'user', content: userMessage }],
+    const response = await client.models.generateContent({
+      model: env.geminiModel,
+      contents: userMessage,
+      config: {
+        systemInstruction: DRAFT_SYSTEM_PROMPT_TEMPLATE(getKnowledgeBaseExcerpt(category)),
+        maxOutputTokens: 400,
+      },
     });
-
-    const textBlock = response.content.find((block) => block.type === 'text');
 
     recordInvocation({
       ticket_id: ticketId,
       invocation_type: 'draft_response',
-      model: env.anthropicModel,
+      model: env.geminiModel,
       status: 'success',
-      input_tokens: response.usage?.input_tokens ?? null,
-      output_tokens: response.usage?.output_tokens ?? null,
+      input_tokens: response.usageMetadata?.promptTokenCount ?? null,
+      output_tokens: response.usageMetadata?.candidatesTokenCount ?? null,
       latency_ms: Date.now() - startedAt,
     });
 
-    return textBlock?.text?.trim() ?? null;
+    return response.text?.trim() ?? null;
   } catch (err) {
     recordInvocation({
       ticket_id: ticketId,
       invocation_type: 'draft_response',
-      model: env.anthropicModel,
+      model: env.geminiModel,
       status: 'error',
       latency_ms: Date.now() - startedAt,
       error_message: err.message,
