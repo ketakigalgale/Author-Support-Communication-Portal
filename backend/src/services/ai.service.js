@@ -114,6 +114,7 @@ export async function classifyTicket({ ticketId, subject, description, bookTitle
       source: 'ai',
     };
   } catch (err) {
+    console.error('Gemini classification failed:', err);
     recordInvocation({
       ticket_id: ticketId,
       invocation_type: 'classification',
@@ -194,6 +195,7 @@ export async function generateDraftResponse({ ticketId, subject, description, ca
 
     return response.text?.trim() ?? null;
   } catch (err) {
+    console.error('Gemini draft generation failed:', err);
     recordInvocation({
       ticket_id: ticketId,
       invocation_type: 'draft_response',
