@@ -27,7 +27,7 @@ export const env = {
   seedAdminPassword: process.env.SEED_ADMIN_PASSWORD ?? 'admin123',
 
   geminiApiKey: process.env.GEMINI_API_KEY ?? '',
-  geminiModel: process.env.GEMINI_MODEL ?? 'gemini-2.5-flash',
+  geminiModel: process.env.GEMINI_MODEL ?? 'gemini-3.5-flash-lite',
 };
 
 export const isAiEnabled = Boolean(env.geminiApiKey);

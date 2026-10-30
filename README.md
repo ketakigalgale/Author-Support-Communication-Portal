@@ -18,7 +18,7 @@ differently with more time. `docs/API.md` has every endpoint.
   SQL, moving to Postgres later is just a connection string change.
 - Real-time: Socket.IO, rooms per user/ticket plus a role:admin room
 - Auth: JWT + bcrypt, email/password
-- AI: Google Gemini (gemini-2.5-flash), picked because it has a genuine
+- AI: Google Gemini (gemini-3.5-flash-lite), picked because it has a genuine
   free tier (no card required), see Model Choice below
 
 ## Running it
@@ -148,13 +148,24 @@ The draft endpoint returns `null` and the UI tells the admin to just
 write the reply themselves. Tested this by literally not setting the key
 and running the whole flow.
 
-**Model choice:** Gemini 2.5 Flash (`GEMINI_MODEL` in `.env` if you want
-to swap it). Two reasons: it's free to use at aistudio.google.com with
-no credit card, which mattered since I didn't want this assignment to
-need paid API access to run or demo; and functionally, classification
+**Model choice:** Gemini 3.5 Flash Lite (`GEMINI_MODEL` in `.env` if you
+want to swap it). Two reasons: it's free to use at aistudio.google.com
+with no credit card, which mattered since I didn't want this assignment
+to need paid API access to run or demo; and functionally, classification
 into a fixed enum and a short grounded draft don't need a frontier
-model, Flash is fast enough to sit in the request path when a ticket is
-created without the author noticing a delay.
+model, Flash Lite is fast enough to sit in the request path when a
+ticket is created without the author noticing a delay. I started on
+`gemini-2.5-flash` and moved off it after hitting its free-tier limit
+(20 requests/day, confirmed by the actual API error, not a number from
+a blog) partway through testing — quotas are tracked per model, so
+switching to Flash Lite also gave the project a fresh quota instead of
+waiting out the cooldown. One gotcha worth noting if you ever swap
+models again: disabling "thinking" is `thinkingConfig: { thinkingBudget: 0 }`
+on 2.5-generation models but that value is rejected outright on
+3.5-generation ones, which instead want
+`thinkingConfig: { thinkingLevel: 'MINIMAL' }` - the API drifts between
+model generations, so the SDK's own type definitions in `node_modules`
+are a faster source of truth than guessing from an older model's docs.
 
 ## What's not done / what I'd fix next
 

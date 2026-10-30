@@ -1,4 +1,4 @@
-import { GoogleGenAI, FunctionCallingConfigMode } from '@google/genai';
+import { GoogleGenAI, FunctionCallingConfigMode, ThinkingLevel } from '@google/genai';
 import { env, isAiEnabled } from '../config/env.js';
 import { db } from '../db/connection.js';
 import { TONE_GUIDELINES, getKnowledgeBaseExcerpt } from './knowledgeBase.js';
@@ -84,7 +84,11 @@ export async function classifyTicket({ ticketId, subject, description, bookTitle
       config: {
         systemInstruction: CLASSIFY_SYSTEM_PROMPT,
         maxOutputTokens: 200,
-        thinkingConfig: { thinkingBudget: 0 },
+        // MINIMAL, not thinkingBudget: 0 - this model generation rejects a
+        // zero budget outright (400 invalid_argument). Thinking still costs
+        // ~0 tokens at MINIMAL for a task this small, which is what we want:
+        // picking a category off a short rubric doesn't need deliberation.
+        thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
         tools: [{ functionDeclarations: [CLASSIFY_FUNCTION] }],
         toolConfig: {
           functionCallingConfig: {
@@ -179,7 +183,7 @@ export async function generateDraftResponse({ ticketId, subject, description, ca
       config: {
         systemInstruction: DRAFT_SYSTEM_PROMPT_TEMPLATE(getKnowledgeBaseExcerpt(category)),
         maxOutputTokens: 600,
-        thinkingConfig: { thinkingBudget: 0 },
+        thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL }, // see note in classifyTicket above
       },
     });
 
