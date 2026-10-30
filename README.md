@@ -148,24 +148,12 @@ The draft endpoint returns `null` and the UI tells the admin to just
 write the reply themselves. Tested this by literally not setting the key
 and running the whole flow.
 
-**Model choice:** Gemini 3.5 Flash Lite (`GEMINI_MODEL` in `.env` if you
-want to swap it). Two reasons: it's free to use at aistudio.google.com
-with no credit card, which mattered since I didn't want this assignment
-to need paid API access to run or demo; and functionally, classification
-into a fixed enum and a short grounded draft don't need a frontier
-model, Flash Lite is fast enough to sit in the request path when a
-ticket is created without the author noticing a delay. I started on
-`gemini-2.5-flash` and moved off it after hitting its free-tier limit
-(20 requests/day, confirmed by the actual API error, not a number from
-a blog) partway through testing — quotas are tracked per model, so
-switching to Flash Lite also gave the project a fresh quota instead of
-waiting out the cooldown. One gotcha worth noting if you ever swap
-models again: disabling "thinking" is `thinkingConfig: { thinkingBudget: 0 }`
-on 2.5-generation models but that value is rejected outright on
-3.5-generation ones, which instead want
-`thinkingConfig: { thinkingLevel: 'MINIMAL' }` - the API drifts between
-model generations, so the SDK's own type definitions in `node_modules`
-are a faster source of truth than guessing from an older model's docs.
+**Model choice:** Gemini 3.5 Flash Lite (`GEMINI_MODEL` in `.env`). Free,
+no card, and more than enough for a fixed-enum classification and a
+short grounded draft. Started on `gemini-2.5-flash`, moved off it after
+its free tier ran out at 20 requests/day. Note for later: disabling
+"thinking" is `thinkingBudget: 0` on 2.5-gen models but 3.5-gen models
+reject that and want `thinkingLevel: 'MINIMAL'` instead.
 
 ## What's not done / what I'd fix next
 
